@@ -31,30 +31,30 @@ Live Demo: https://kathail.github.io/NorthScrape-Dashboard/
 
 ## Usage
 
--Open index.html in any modern browser (Chrome, Firefox, Edge, Safari)
--Load Data: Drag-and-drop a CSV file or click "Load Demo Data"
--Manage Leads: Search/filter, add notes, mark statuses, or select leads for routing
--Export: Use built-in PDF export or copy bulk data
+- Open index.html in any modern browser (Chrome, Firefox, Edge, Safari)
+- Load Data: Drag-and-drop a CSV file or click "Load Demo Data"
+- Manage Leads: Search/filter, add notes, mark statuses, or select leads for routing
+- Export: Use built-in PDF export or copy bulk data
 
 ## CSV Format
 
--Column Header,Description
--Name,Business/contact name (required)
--Address,Full street address (required for mapping)
--Phone,Contact number (auto-formatted on load)
+- Column Header,Description
+- Name,Business/contact name (required)
+- Address,Full street address (required for mapping)
+- Phone,Contact number (auto-formatted on load)
 
 ## Configuration
 
--Google Maps API (optional): Add your API key in the script section for routing
--Dark Mode: Automatically follows system preference or use the toggle
+- Google Maps API (optional): Add your API key in the script section for routing
+- Dark Mode: Automatically follows system preference or use the toggle
 
 ## Tech Stack
 
--HTML5 + JavaScript (ES6+)
--Tailwind CSS (CDN)
--Lucide Icons
--PapaParse (CSV parsing)
--jsPDF (PDF export)
+- HTML5 + JavaScript (ES6+)
+- Tailwind CSS (CDN)
+- Lucide Icons
+- PapaParse (CSV parsing)
+- jsPDF (PDF export)
 
 
 ## Disclaimer
