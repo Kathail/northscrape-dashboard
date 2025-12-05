@@ -27,7 +27,7 @@ Live Demo: https://kathail.github.io/NorthScrape-Dashboard/
    git clone https://github.com/Kathail/NorthScrape-Dashboard.git
    cd NorthScrape-Dashboard
 
-   No dependencies needed—it's a single index.html file.
+   // No dependencies needed
 
 ## Usage
 
