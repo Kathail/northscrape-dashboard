@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NorthScrape Leads Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { colors: { slate: { 850: '#1e293b', 900: '#0f172a', 950: '#020617' } } } }
+        }
+    </script>
+    
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(229, 231, 235, 0.5); }
+        .dark .glass-panel { background: rgba(30, 41, 59, 0.95); border: 1px solid rgba(71, 85, 105, 0.5); }
+        
+        /* Custom Checkbox */
+        .custom-checkbox { appearance: none; background-color: #fff; margin: 0; width: 1.25em; height: 1.25em; border: 2px solid #cbd5e1; border-radius: 0.25em; display: grid; place-content: center; cursor: pointer; }
+        .dark .custom-checkbox { background-color: #1e293b; border-color: #475569; }
+        .custom-checkbox::before { content: ""; width: 0.65em; height: 0.65em; transform: scale(0); transition: 120ms; box-shadow: inset 1em 1em white; transform-origin: center; clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); background-color: #3b82f6; }
+        .custom-checkbox:checked { background-color: #3b82f6; border-color: #3b82f6; }
+        .custom-checkbox:checked::before { transform: scale(1); background-color: white; }
+
+        /* Toast Animation */
+        .toast { animation: fadeInOut 2s ease-in-out forwards; }
+        @keyframes fadeInOut { 0% { opacity: 0; transform: translateY(20px); } 10% { opacity: 1; transform: translateY(0); } 90% { opacity: 1; } 100% { opacity: 0; transform: translateY(-20px); } }
+        
+        /* Transitions */
+        body, .bg-white, .bg-slate-50, .bg-slate-100, tr { transition: background-color 0.2s ease, color 0.2s ease; }
+        
+        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen font-sans transition-colors duration-300 pb-32 relative">
+
+    <div id="toast-container" class="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-[60] pointer-events-none w-max flex flex-col gap-2 items-center"></div>
+
+    <!-- Nav -->
+    <nav class="bg-blue-900 dark:bg-slate-900 text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="candycane" class="h-6 w-6 text-pink-400"></i>
+                    <span class="font-bold text-lg sm:text-xl tracking-tight truncate">NorthScrape</span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="hidden md:block text-xs text-blue-200">Press '/' to search</div>
+                    <button onclick="clearSessionData()" class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-200 text-xs rounded border border-red-500/50 transition" title="Clear All Saved Data">
+                        <i data-lucide="trash-2" class="h-3 w-3"></i> Clear Data
+                    </button>
+                    <button id="theme-toggle" class="p-2 rounded-lg bg-blue-800 dark:bg-slate-800 hover:bg-blue-700 transition-colors">
+                        <i data-lucide="moon" id="theme-icon" class="h-5 w-5 text-yellow-300"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        
+        <!-- Stats -->
+        <div id="stats-container" class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 mb-6 hidden animate-fade-in">
+            <div class="glass-panel p-4 rounded-xl border-l-4 border-blue-500">
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Total</p>
+                <p class="text-xl sm:text-2xl font-bold dark:text-white" id="stat-total">0</p>
+            </div>
+            <div class="glass-panel p-4 rounded-xl border-l-4 border-green-500">
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Phones</p>
+                <p class="text-xl sm:text-2xl font-bold dark:text-white" id="stat-phones">0</p>
+            </div>
+            <div class="glass-panel p-4 rounded-xl border-l-4 border-purple-500">
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Pending</p>
+                <p class="text-xl sm:text-2xl font-bold dark:text-white" id="stat-pending">0</p>
+            </div>
+            <div class="glass-panel p-4 rounded-xl border-l-4 border-orange-500">
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Route</p>
+                <p class="text-xl sm:text-2xl font-bold dark:text-white" id="stat-route">0</p>
+            </div>
+        </div>
+
+        <!-- Load State -->
+        <div id="drop-zone" class="border-4 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-8 text-center hover:border-blue-500 transition-colors cursor-pointer mb-8 animate-fade-in">
+            <i data-lucide="upload-cloud" class="h-12 w-12 mx-auto text-slate-400 mb-4"></i>
+            <h3 class="text-lg font-semibold dark:text-slate-200">Load Leads</h3>
+            <p class="text-slate-500 mt-2 text-sm">Drag & Drop CSV or click to browse</p>
+            <input type="file" id="file-input" class="hidden" accept=".csv">
+            <div class="flex gap-4 justify-center mt-6">
+                <button onclick="document.getElementById('file-input').click()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Select File</button>
+                <button onclick="loadDemoData()" class="px-6 py-2 bg-slate-200 dark:bg-slate-700 dark:text-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition">Load Demo Data</button>
+            </div>
+        </div>
+
+        <!-- Main Interface -->
+        <div id="data-container" class="hidden animate-fade-in">
+            
+            <!-- Controls -->
+            <div class="flex flex-col lg:flex-row gap-4 mb-6">
+                <div class="relative flex-grow">
+                    <i data-lucide="search" class="absolute left-3 top-3 h-5 w-5 text-slate-400"></i>
+                    <input type="text" id="search-input" placeholder="Search... (Press '/')" 
+                           class="w-full pl-10 pr-4 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
+                </div>
+                
+                <div class="flex flex-wrap gap-2 items-center justify-between sm:justify-start">
+                    <label class="flex items-center gap-2 cursor-pointer bg-white dark:bg-slate-800 px-3 py-2 rounded-lg border dark:border-slate-700 select-none shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+                        <input type="checkbox" id="filter-phones" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                        <span class="text-xs font-medium dark:text-slate-200">Phones Only</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 cursor-pointer bg-white dark:bg-slate-800 px-3 py-2 rounded-lg border dark:border-slate-700 select-none shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+                        <input type="checkbox" id="filter-uncontacted" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                        <span class="text-xs font-medium dark:text-slate-200">Pending</span>
+                    </label>
+
+                    <div class="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                        <button onclick="copyAllPhones()" class="flex-1 px-3 py-2 bg-slate-200 dark:bg-slate-700 dark:text-white rounded-lg text-sm hover:bg-slate-300 transition shadow-sm" title="Copy All Visible Numbers"><i data-lucide="copy" class="h-4 w-4"></i></button>
+                        <button onclick="document.getElementById('file-input').click()" class="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition shadow-sm" title="Import New"><i data-lucide="upload" class="h-4 w-4"></i></button>
+                        <button onclick="clearSessionData()" class="flex-1 md:hidden px-3 py-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg text-sm hover:bg-red-200 transition shadow-sm"><i data-lucide="trash-2" class="h-4 w-4"></i></button>
+                        <button onclick="exportPDF()" class="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition shadow-sm" title="PDF"><i data-lucide="file-text" class="h-4 w-4"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Desktop Table -->
+            <div class="hidden md:block bg-white dark:bg-slate-800 rounded-xl shadow overflow-hidden border dark:border-slate-700">
+                <div class="overflow-x-auto max-h-[70vh]">
+                    <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700 relative">
+                        <thead class="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10 shadow-sm">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase w-16 cursor-pointer hover:text-blue-500" onclick="sortBy('status')">Stat</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase w-16">Route</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:text-blue-500" onclick="sortBy('Name')">Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:text-blue-500" onclick="sortBy('Address')">Location</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:text-blue-500" onclick="sortBy('Phone')">Phone</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase w-16">Note</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Map</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body" class="divide-y divide-slate-200 dark:divide-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Mobile Cards -->
+            <div id="mobile-cards" class="md:hidden space-y-4"></div>
+            
+            <div id="no-results" class="hidden p-12 text-center text-slate-500 dark:text-slate-400">
+                <i data-lucide="search-x" class="h-12 w-12 mx-auto mb-4 opacity-50"></i>
+                <p>No matching leads found.</p>
+                <button onclick="clearFilters()" class="mt-4 text-blue-500 hover:underline">Clear Filters</button>
+            </div>
+            
+            <!-- Pagination -->
+            <div class="mt-4 bg-slate-50 dark:bg-slate-900 px-4 py-4 border-t dark:border-slate-700 flex justify-between items-center rounded-xl shadow-sm">
+                <span id="showing-count" class="text-xs text-slate-500 dark:text-slate-400">0 results</span>
+                <div class="flex gap-2">
+                    <button id="btn-prev" onclick="changePage(-1)" class="px-4 py-2 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded text-sm disabled:opacity-50 hover:bg-slate-50 dark:hover:bg-slate-700 transition">Prev</button>
+                    <button id="btn-next" onclick="changePage(1)" class="px-4 py-2 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded text-sm disabled:opacity-50 hover:bg-slate-50 dark:hover:bg-slate-700 transition">Next</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- FAB -->
+    <div id="route-fab" class="fixed bottom-6 right-6 transition-transform duration-300 transform translate-y-32 z-50">
+        <button onclick="launchRoute()" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-full shadow-2xl hover:scale-105 transition-transform">
+            <i data-lucide="navigation" class="h-6 w-6"></i> 
+            <span class="font-bold text-lg">Go (<span id="route-count">0</span>)</span>
+        </button>
+        <div id="route-warning" class="absolute -top-8 right-0 bg-red-100 text-red-700 text-xs px-2 py-1 rounded shadow hidden font-bold">10+ stops</div>
+    </div>
+
+    <!-- Note Modal -->
+    <div id="note-modal" class="fixed inset-0 bg-black/50 z-[70] hidden flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 border border-slate-200 dark:border-slate-700">
+            <div class="p-4 border-b dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+                <h3 class="font-bold text-lg dark:text-white flex items-center gap-2"><i data-lucide="sticky-note" class="w-5 h-5 text-yellow-500"></i> Lead Notes</h3>
+                <button onclick="closeNoteModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-4">
+                <textarea id="note-input" class="w-full h-32 p-3 border rounded-lg dark:bg-slate-950 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none shadow-inner" placeholder="Enter notes here (e.g. 'Call back Tuesday', 'Gate code 1234')..."></textarea>
+                <div class="flex justify-between items-center mt-4">
+                    <span id="note-status" class="text-xs text-slate-400 italic"></span>
+                    <div class="flex gap-2">
+                        <button onclick="closeNoteModal()" class="px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-sm font-medium">Cancel</button>
+                        <button onclick="saveCurrentNote()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium shadow-sm">Save Note</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let allData = [], filteredData = [], currentPage = 1, currentSort = { col: null, dir: 'asc' };
+        let routeSet = new Set();
+        let currentNoteId = null;
+        const rowsPerPage = 50;
+        let debounceTimer;
+
+        // Init
+        lucide.createIcons();
+        if(localStorage.theme==='dark'||(!localStorage.theme&&window.matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark');
+        
+        // Auto-load Sequence
+        initApp();
+
+        function initApp() {
+            // Check for saved session
+            const savedData = localStorage.getItem('northscrape_data');
+            if (savedData) {
+                try {
+                    allData = JSON.parse(savedData);
+                    // Re-instantiate routeSet if saved (optional, currently not saving route state)
+                    resetUI();
+                    showToast(`Restored ${allData.length} leads from session`);
+                    return;
+                } catch(e) { console.error("Session load failed", e); }
+            }
+
+            // Fallback to file fetch
+            fetch('leads.csv').then(r=>{
+                if(r.ok) r.text().then(parseCSV);
+            });
+        }
+
+        // Listeners
+        document.getElementById('theme-toggle').onclick=()=>{ document.documentElement.classList.toggle('dark'); localStorage.theme=document.documentElement.classList.contains('dark')?'dark':'light'; };
+        document.getElementById('file-input').onchange=(e)=>handleFile(e.target.files[0]);
+        document.getElementById('file-input').onclick=(e)=>e.target.value=null;
+        
+        const dropZone = document.getElementById('drop-zone');
+        dropZone.ondragover=(e)=>{e.preventDefault(); dropZone.classList.add('border-blue-500');};
+        dropZone.ondragleave=(e)=>{e.preventDefault(); dropZone.classList.remove('border-blue-500');};
+        dropZone.ondrop=(e)=>{e.preventDefault(); dropZone.classList.remove('border-blue-500'); handleFile(e.dataTransfer.files[0]);};
+        
+        const searchInput = document.getElementById('search-input');
+        searchInput.oninput=()=>{ clearTimeout(debounceTimer); debounceTimer=setTimeout(runFilters,300); };
+        
+        document.getElementById('filter-phones').onchange=runFilters;
+        document.getElementById('filter-uncontacted').onchange=runFilters;
+
+        // Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '/' && document.activeElement !== searchInput && document.activeElement.tagName !== 'TEXTAREA') {
+                e.preventDefault();
+                searchInput.focus();
+            }
+            if (e.key === 'Escape') {
+                if(!document.getElementById('note-modal').classList.contains('hidden')) {
+                    closeNoteModal();
+                } else {
+                    searchInput.blur();
+                    clearFilters();
+                }
+            }
+        });
+
+        // Utilities
+        function formatPhoneNumber(str) {
+            if(!str) return 'N/A';
+            const cleaned = ('' + str).replace(/\D/g, '');
+            // Check if 11 digits starting with 1 (US/Canada country code)
+            const match11 = cleaned.match(/^1(\d{3})(\d{3})(\d{4})$/);
+            if (match11) return `(${match11[1]}) ${match11[2]}-${match11[3]}`;
+            // Check if 10 digits
+            const match10 = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
+            if (match10) return `(${match10[1]}) ${match10[2]}-${match10[3]}`;
+            return str;
+        }
+
+        // Core Functions
+        function handleFile(f){ 
+            if(!f) return;
+            Papa.parse(f,{header:true,skipEmptyLines:true,complete:r=>{ 
+                if(!r.meta.fields || !r.meta.fields.includes("Name")) return alert("Invalid CSV. Needs 'Name' column."); 
+                processData(r.data);
+            }}); 
+        }
+        
+        function parseCSV(txt){ 
+            const r=Papa.parse(txt,{header:true,skipEmptyLines:true}); 
+            processData(r.data);
+        }
+
+        function processData(data) {
+            allData = data.map(mapRow);
+            // Save Session
+            try {
+                localStorage.setItem('northscrape_data', JSON.stringify(allData));
+            } catch(e) {
+                showToast("Data too large to save session");
+            }
+            resetUI();
+            showToast(`Loaded ${allData.length} leads`);
+        }
+
+        function loadDemoData() {
+            const demo = [];
+            const types = ['Plumbing', 'Electric', 'Roofing', 'HVAC', 'General Contracting'];
+            const cities = ['Sudbury', 'Toronto', 'Ottawa', 'Hamilton', 'London'];
+            for(let i=1; i<=150; i++) {
+                const type = types[Math.floor(Math.random()*types.length)];
+                const city = cities[Math.floor(Math.random()*cities.length)];
+                demo.push({
+                    Name: `${type} of ${city} #${i}`,
+                    Address: `${Math.floor(Math.random()*900)+100} Main St, ${city}, ON`,
+                    Phone: Math.random() > 0.3 ? `555${Math.floor(Math.random()*899)+100}${Math.floor(Math.random()*8999)+1000}` : 'N/A'
+                });
+            }
+            processData(demo);
+        }
+
+        function clearSessionData() {
+            if(confirm("Are you sure you want to clear all loaded leads? Notes and Contact status will be preserved.")) {
+                localStorage.removeItem('northscrape_data');
+                allData = [];
+                resetUI();
+                showToast("Session Data Cleared");
+            }
+        }
+
+        function mapRow(r){ 
+            // Create ID and format phone once
+            return {
+                ...r, 
+                id: btoa(unescape(encodeURIComponent((r.Name||'')+(r.Address||'')))).substring(0,16),
+                Phone: formatPhoneNumber(r.Phone)
+            }; 
+        }
+        
+        function resetUI() {
+            routeSet.clear();
+            updateRouteUI();
+            searchInput.value = '';
+            document.getElementById('filter-phones').checked = false;
+            document.getElementById('filter-uncontacted').checked = false;
+            initDashboard();
+        }
+
+        function initDashboard(){
+            if(allData.length === 0) {
+                document.getElementById('drop-zone').classList.remove('hidden');
+                document.getElementById('stats-container').classList.add('hidden');
+                document.getElementById('data-container').classList.add('hidden');
+            } else {
+                document.getElementById('drop-zone').classList.add('hidden');
+                document.getElementById('stats-container').classList.remove('hidden');
+                document.getElementById('stats-container').classList.add('grid');
+                document.getElementById('data-container').classList.remove('hidden');
+                runFilters();
+            }
+        }
+
+        function runFilters(){
+            const q=searchInput.value.toLowerCase();
+            const ph=document.getElementById('filter-phones').checked;
+            const pend=document.getElementById('filter-uncontacted').checked;
+            const cont=getContacted();
+
+            filteredData=allData.filter(r=>{
+                const txt=(r.Name+r.Address+r.Phone).toLowerCase();
+                const hasP=r.Phone&&r.Phone!=='N/A';
+                const isC=cont.includes(r.id);
+                return txt.includes(q) && (!ph||hasP) && (!pend||!isC);
+            });
+
+            if(currentSort.col) filteredData.sort((a,b)=>{
+                let va=a[currentSort.col]||'', vb=b[currentSort.col]||'';
+                if(currentSort.col==='status'){ va=cont.includes(a.id); vb=cont.includes(b.id); }
+                return (va<vb?-1:1)*(currentSort.dir==='asc'?1:-1);
+            });
+
+            currentPage=1; renderTable(); updateStats();
+        }
+
+        function renderTable(){
+            const tbody=document.getElementById('table-body');
+            const mobile=document.getElementById('mobile-cards');
+            tbody.innerHTML=''; mobile.innerHTML='';
+            
+            const start=(currentPage-1)*rowsPerPage;
+            const pageData=filteredData.slice(start,start+rowsPerPage);
+            const cont=getContacted();
+            const notes = getNotes();
+
+            document.getElementById('no-results').classList.toggle('hidden', filteredData.length>0);
+            document.getElementById('showing-count').innerText=`${filteredData.length?start+1:0}-${Math.min(start+rowsPerPage,filteredData.length)} of ${filteredData.length}`;
+            
+            const fd=document.createDocumentFragment(), fm=document.createDocumentFragment();
+
+            pageData.forEach(r=>{
+                const isC=cont.includes(r.id), hasP=r.Phone&&r.Phone!=='N/A', inR=routeSet.has(r.id);
+                const hasNote = !!notes[r.id];
+                
+                // Desktop
+                const tr=document.createElement('tr');
+                tr.className=`hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${isC?'opacity-50 bg-slate-50 dark:bg-slate-900':''}`;
+                tr.innerHTML=`
+                    <td class="px-6 py-4"><input type="checkbox" class="custom-checkbox" ${isC?'checked':''} onclick="toggleC('${r.id}')"></td>
+                    <td class="px-6 py-4"><button onclick="toggleR('${r.id}')" class="p-2 rounded-full transition ${inR?'text-blue-600 bg-blue-100 dark:bg-blue-900 dark:text-blue-300':'text-slate-300 hover:text-slate-500'}"><i data-lucide="map-pin" class="w-5 h-5 ${inR?'fill-current':''}"></i></button></td>
+                    <td class="px-6 py-4 dark:text-white ${isC?'line-through':''}">${r.Name}</td>
+                    <td class="px-6 py-4 text-slate-600 dark:text-slate-400 cursor-pointer hover:text-blue-500" onclick="copy('${r.Address}')">${r.Address}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${hasP?`<a href="tel:${r.Phone}" class="text-green-600 font-mono font-bold hover:underline whitespace-nowrap px-2 py-1 rounded bg-green-50 dark:bg-green-900/30">${r.Phone}</a>`:'<span class="text-slate-400 text-sm">N/A</span>'}</td>
+                    <td class="px-6 py-4"><button onclick="openNoteModal('${r.id}')" class="p-2 rounded transition ${hasNote ? 'text-blue-500 hover:text-blue-600' : 'text-slate-300 hover:text-slate-500'}"><i data-lucide="${hasNote ? 'sticky-note' : 'file-edit'}" class="w-5 h-5 ${hasNote ? 'fill-current' : ''}"></i></button></td>
+                    <td class="px-6 py-4"><a href="https://maps.google.com/?q=${encodeURIComponent(r.Name+' '+r.Address)}" target="_blank" class="text-blue-500 hover:underline">Map</a></td>
+                `;
+                fd.appendChild(tr);
+
+                // Mobile (Whole Card Clickable)
+                const c=document.createElement('div');
+                c.className=`bg-white dark:bg-slate-800 rounded-lg shadow p-4 cursor-pointer select-none transition active:scale-[0.98] border border-transparent ${isC?'opacity-60 bg-slate-50 dark:bg-slate-900':''} ${inR ? 'border-blue-500 dark:border-blue-500' : ''}`;
+                c.onclick=()=>toggleC(r.id);
+                c.innerHTML=`
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex-1 pr-2">
+                            <h3 class="font-bold text-lg dark:text-white ${isC?'line-through':''}">${r.Name}</h3>
+                            <p class="text-sm text-slate-500">${r.Address}</p>
+                        </div>
+                        <button onclick="event.stopPropagation(); toggleR('${r.id}')" class="p-2 -mr-2 rounded-full ${inR?'text-blue-600 dark:text-blue-300':'text-slate-300'}"><i data-lucide="map-pin" class="w-7 h-7 ${inR?'fill-current':''}"></i></button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mt-4">
+                        ${hasP ? `<a href="tel:${r.Phone}" onclick="event.stopPropagation()" class="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-100 py-2.5 rounded-lg text-center font-bold flex items-center justify-center gap-1 text-xs"><i data-lucide="phone" class="w-3 h-3"></i> Call</a>` : '<div class="bg-slate-100 text-slate-400 py-2.5 rounded-lg text-center text-xs">No Phone</div>'}
+                        <button onclick="event.stopPropagation(); openNoteModal('${r.id}')" class="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-100 py-2.5 rounded-lg text-center font-bold flex items-center justify-center gap-1 text-xs"><i data-lucide="sticky-note" class="w-3 h-3"></i> ${hasNote ? 'Edit Note' : 'Add Note'}</button>
+                        <a href="https://maps.google.com/?q=${encodeURIComponent(r.Name+' '+r.Address)}" target="_blank" onclick="event.stopPropagation()" class="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-100 py-2.5 rounded-lg text-center font-bold flex items-center justify-center gap-1 text-xs"><i data-lucide="map" class="w-3 h-3"></i> Map</a>
+                    </div>
+                `;
+                fm.appendChild(c);
+            });
+            tbody.appendChild(fd); mobile.appendChild(fm); lucide.createIcons();
+            
+            const max=Math.ceil(filteredData.length/rowsPerPage)||1;
+            document.getElementById('btn-prev').disabled=currentPage===1;
+            document.getElementById('btn-next').disabled=currentPage===max;
+        }
+
+        // Notes Logic
+        function getNotes() { return JSON.parse(localStorage.getItem('northscrape_notes') || '{}'); }
+        
+        function openNoteModal(id) {
+            currentNoteId = id;
+            const notes = getNotes();
+            const textarea = document.getElementById('note-input');
+            textarea.value = notes[id] || '';
+            document.getElementById('note-modal').classList.remove('hidden');
+            setTimeout(() => textarea.focus(), 100);
+        }
+
+        function closeNoteModal() {
+            document.getElementById('note-modal').classList.add('hidden');
+            currentNoteId = null;
+        }
+
+        function saveCurrentNote() {
+            if(!currentNoteId) return;
+            const text = document.getElementById('note-input').value.trim();
+            const notes = getNotes();
+            if(text) notes[currentNoteId] = text;
+            else delete notes[currentNoteId];
+            
+            localStorage.setItem('northscrape_notes', JSON.stringify(notes));
+            closeNoteModal();
+            renderTable();
+            showToast("Note Saved");
+        }
+
+        // Action Logic
+        function launchRoute(){
+            const stops=allData.filter(r=>routeSet.has(r.id)).map(r=>encodeURIComponent(r.Address));
+            if(!stops.length)return;
+            // ROBUST MOBILE URL: api=1, origin=My+Location, pipe encoded
+            let url="https://www.google.com/maps/dir/?api=1&origin=My+Location"; 
+            if(stops.length===1) url+=`&destination=${stops[0]}`;
+            else { const d=stops.pop(); url+=`&destination=${d}&waypoints=${stops.join('%7C')}`; }
+            window.open(url,'_blank');
+        }
+
+        function copyAllPhones() {
+            const phones = filteredData.map(r => r.Phone).filter(p => p && p !== 'N/A').join('\n');
+            if(phones) { navigator.clipboard.writeText(phones); showToast(`${filteredData.length} Numbers Copied!`); }
+            else showToast("No numbers to copy");
+        }
+
+        // Helpers
+        function getContacted(){ return JSON.parse(localStorage.getItem('contacted_leads')||'[]'); }
+        function toggleC(id){ const c=getContacted(), i=c.indexOf(id); i>-1?c.splice(i,1):c.push(id); localStorage.setItem('contacted_leads',JSON.stringify(c)); updateStats(); renderTable(); }
+        function toggleR(id){ routeSet.has(id)?routeSet.delete(id):routeSet.add(id); updateRouteUI(); renderTable(); }
+        function updateRouteUI(){ 
+            const s=routeSet.size; document.getElementById('route-count').innerText=s; 
+            const fab=document.getElementById('route-fab'); s>0?fab.classList.remove('translate-y-32'):fab.classList.add('translate-y-32');
+            document.getElementById('route-warning').classList.toggle('hidden', s<=10);
+            document.getElementById('stat-route').innerText=s;
+        }
+        function updateStats(){ const t=allData.length, p=allData.filter(r=>r.Phone&&r.Phone!=='N/A').length, c=getContacted(), pen=t-allData.filter(r=>c.includes(r.id)).length; document.getElementById('stat-total').innerText=t; document.getElementById('stat-phones').innerText=p; document.getElementById('stat-pending').innerText=pen; }
+        function copy(t){ navigator.clipboard.writeText(t); showToast("Address Copied"); }
+        function showToast(m){ const d=document.createElement('div'); d.className="toast bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg mb-2 font-medium text-sm"; d.innerText=m; document.getElementById('toast-container').appendChild(d); setTimeout(()=>d.remove(),2000); }
+        function changePage(d){ currentPage+=d; renderTable(); }
+        function sortBy(c){ currentSort.col===c?currentSort.dir=currentSort.dir==='asc'?'desc':'asc':(currentSort.col=c,currentSort.dir='asc'); runFilters(); }
+        function clearFilters(){ document.getElementById('search-input').value=''; document.querySelectorAll('input[type=checkbox]').forEach(c=>c.checked=false); runFilters(); }
+        async function exportPDF(){ const {jsPDF}=window.jspdf; const d=new jsPDF(); d.text("Lead Export",14,20); d.autoTable({startY:30,head:[['Name','Address','Phone']],body:filteredData.map(r=>[r.Name,r.Address,r.Phone])}); d.save('leads.pdf'); }
+    </script>
+</body>
+</html>
